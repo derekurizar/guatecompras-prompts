@@ -314,21 +314,67 @@ Con ~20 000 filas, recalcular en cada tecla se siente lento: aplica un debounce 
 
 ## Fase 4 — Verificación antes de publicar
 
-Renderiza el archivo con Playwright (`NODE_PATH=~/.npm-global/lib/node_modules`,
-chromium ya instalado), captura los errores de consola y **revisa la captura una vez**.
-Lista de chequeo:
+La verificación se degrada con gracia. El nivel A **siempre** corre; el nivel B corre
+con lo que haya disponible; si no hay nada, se declara y se sigue. Nunca instales un
+navegador ni Playwright para cumplir esta fase: son cientos de MB en la máquina de
+alguien más, y el nivel A ya atrapa la mayoría de los errores reales.
 
-- [ ] Suma de `monto` de las filas = KPI de monto adjudicado (reconciliación numérica).
-- [ ] `meta.mesesPresentes` coincide con lo pedido, o el pie lo declara.
+### Nivel A — Sin navegador, siempre
+
+Con `device_bash` + `python3` sobre el JSON compacto y el HTML generado. Son chequeos
+de datos y de texto, no de píxeles, y por eso son los más baratos y los que más
+seguido fallan:
+
+- [ ] La suma de `monto` de `rows` coincide con `meta` y con el KPI incrustado.
+- [ ] `meta.mesesPresentes` coincide con lo pedido, o el pie declara qué falta.
+- [ ] El JSON incrustado en el HTML se extrae y parsea con `json.loads` sin error.
+- [ ] Todos los índices de `pools` caen dentro del rango de su arreglo; ningún `null`.
+- [ ] El HTML no contiene `NaN`, `undefined`, `Infinity` ni `[object Object]`.
+- [ ] Cada token de color definido en `:root` aparece redefinido en los dos bloques
+      de tema oscuro (un `grep` de nombres de variables basta).
+- [ ] Un NOG cualquiera de la tabla construye bien la URL de guatecompras.gt.
+
+### Nivel B — Revisión visual, con lo que exista
+
+Prueba en este orden y quédate con el primero que funcione:
+
+1. **El navegador de Claude** (el mismo de la fase 1, ya está abierto). Sirve el
+   archivo desde disco en vez de abrirlo con `file://`, que suele romperse por
+   restricciones del navegador:
+
+   ```
+   cd ~/Downloads/ocds_gc && nohup python3 -m http.server 8765 >/dev/null 2>&1 &
+   ```
+
+   Luego `navigate` a `http://127.0.0.1:8765/tablero.html` y toma la captura. Al
+   terminar, mata el servidor. Aquí probablemente no tengas la consola del navegador:
+   compénsalo apoyándote en el nivel A, que ya cubre los errores que la consola
+   delataría.
+
+2. **Playwright**, solo si ya está instalado — compruébalo, no lo asumas:
+   `ls ~/.npm-global/lib/node_modules/playwright 2>/dev/null`. Si está, úsalo con
+   `NODE_PATH=~/.npm-global/lib/node_modules`, porque agrega dos cosas que el otro
+   camino no da: errores de consola y viewport fijo para comparar entre corridas.
+
+3. **Nada disponible** → salta el nivel B. No es un fallo del flujo.
+
+Si conseguiste captura, **revísala una vez**:
+
 - [ ] Ningún valor de KPI cortado ni desbordado.
 - [ ] Marcas del eje Y legibles y redondas.
 - [ ] Calendario con contraste real en claro y en oscuro.
 - [ ] Dropdown abierto sin solaparse con lo de abajo; búsqueda sin tildes funciona.
-- [ ] Un NOG de la tabla abre el concurso correcto en guatecompras.gt.
-- [ ] Consola sin errores.
 
 Un solo ciclo de corrección, luego publica. Si algo sigue mal después de esa
 corrección, publícalo y di qué quedó pendiente en lugar de seguir iterando en silencio.
+
+### Cuando se salta el nivel B
+
+Publica igual y dilo en el mensaje final, con la lista corta de lo que conviene que
+el usuario mire él mismo: KPIs sin cortar, eje legible, contraste del calendario y
+el dropdown de proveedores abierto. El tablero se le renderiza en pantalla de todos
+modos, así que su ojo sustituye bien a la captura — lo que no se puede sustituir es
+decírselo.
 
 ---
 
